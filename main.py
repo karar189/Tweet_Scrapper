@@ -5,6 +5,8 @@ import requests
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 import time
+from dotenv import load_dotenv
+import os
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -21,6 +23,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Load .env file
+load_dotenv()
+
+# Accessing variables
+twitter_api_key = os.getenv('TWITTER_API_KEY')
+google_api_key = os.getenv('GOOGLE_API_KEY')
 
 class TrendingTopic(BaseModel):
     challenge: str
@@ -76,7 +85,7 @@ def get_twitter_trends():
         woeid = "23424848"  # Worldwide trends
 
         headers = {
-            'Authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+            'Authorization': f'Bearer {twitter_api_key}',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept': 'application/json',
             'Origin': 'https://twitter.com',
@@ -374,7 +383,7 @@ def get_google_web3_trends():
         params = {
             "q": "Web3",
             "sortBy": "publishedAt",
-            "apiKey": "cd8752e75e93405daa53498ced396941",  # Replace with your API key
+            "apiKey": {google_api_key},  # Replace with your API key
             "pageSize": 5,  # Fetch top 5 news articles
         }
 
