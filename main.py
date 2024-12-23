@@ -66,6 +66,7 @@ web3_reddit_cache = {
 
 CACHE_DURATION = 300  # Cache duration in seconds (5 minutes)
 WEB3_KEYWORDS = ["#web3", "#crypto", "#nft"]
+WEB3_4CHAN_BOARDS = ["g", "biz"]
 
 def get_twitter_trends():
     """Fetch trending topics from Twitter."""
@@ -123,7 +124,7 @@ def get_twitter_web3_trends():
     """Fetch Web3-specific trending topics from Twitter."""
     try:
         url = "https://api.twitter.com/1.1/trends/place.json"
-        woeid = "23424848"  # Worldwide trends
+        woeid = "1"  # Worldwide trends
 
         headers = {
             'Authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
@@ -403,3 +404,88 @@ def get_google_web3_trends():
     except Exception as e:
         logger.exception("Exception occurred while fetching Google Web3 trends.")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+# Function to fetch Web3-related threads from 4chan
+def get_4chan_web3_trends():
+    """Fetch Web3-related posts from 4chan."""
+    try:
+        # 4chan API endpoint for /g/ (technology) or /biz/ (business) board
+        board_url = "https://a.4cdn.org/g/catalog.json"  # Change to /biz/ for business-related content
+        response = requests.get(board_url)
+
+        if response.status_code == 200:
+            threads_data = response.json()
+            web3_threads = []
+
+            # Iterate through threads and filter for Web3-related topics
+            for page in threads_data:
+                for thread in page.get('threads', []):
+                    subject = thread.get('subject', '')
+                    if any(keyword in subject.lower() for keyword in WEB3_4CHAN_BOARDS):
+                        web3_threads.append({
+                            "challenge": subject,
+                            "reason": f"Replies: {thread.get('replies', 0)}"
+                        })
+
+            return web3_threads
+        else:
+            logger.error(f"Error fetching 4chan threads: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail="Unable to fetch trends from 4chan")
+
+    except Exception as e:
+        logger.exception("An error occurred while fetching 4chan Web3 trends")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+# Function to fetch Web3-related threads from 4chan
+def get_4chan_web3_trends():
+    """Fetch Web3-related posts from 4chan."""
+    try:
+        board_url = "https://a.4cdn.org/g/catalog.json"  # Change to /biz/ for business-related content
+        response = requests.get(board_url)
+
+        if response.status_code == 200:
+            threads_data = response.json()
+            web3_threads = []
+
+            # Iterate through threads and filter for Web3-related topics
+            for page in threads_data:
+                for thread in page.get('threads', []):
+                    subject = thread.get('subject', '')
+                    if any(keyword in subject.lower() for keyword in WEB3_KEYWORDS):
+                        # Extracting the necessary information
+                        web3_threads.append({
+                            "challenge": subject,
+                            "reason": f"Replies: {thread.get('replies', 0)}"
+                        })
+
+            if not web3_threads:
+                return [{"challenge": "No Web3-related threads found", "reason": "N/A"}]
+            
+            return web3_threads
+        else:
+            logger.error(f"Error fetching 4chan threads: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail="Unable to fetch trends from 4chan")
+
+    except Exception as e:
+        logger.exception("An error occurred while fetching 4chan Web3 trends")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+# Endpoint for 4chan Web3 trends
+@app.get("/trending-4chan/web3", response_model=TrendingResponse)
+async def trending_4chan_web3():
+    """Fetch Web3-related trends from 4chan."""
+    try:
+        # Fetch the Web3 trends from 4chan
+        trends = get_4chan_web3_trends()
+        
+        # Return the response
+        return TrendingResponse(status="success", data=trends)
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.exception("An error occurred while fetching 4chan Web3 trends")
+        raise HTTPException(status_code=500, detail="Failed to fetch 4chan Web3 trends")
