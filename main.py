@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import time
 from dotenv import load_dotenv
 import os
+import uvicorn
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -30,6 +31,11 @@ load_dotenv()
 # Accessing variables
 twitter_api_key = os.getenv('TWITTER_API_KEY')
 google_api_key = os.getenv('GOOGLE_API_KEY')
+api_port = os.getenv('PORT')
+
+#Setting up port
+if __name__ == "__main__":
+    uvicorn.run("filename:app", host="0.0.0.0", port={api_port}, reload=True)
 
 class TrendingTopic(BaseModel):
     challenge: str
@@ -82,7 +88,7 @@ def get_twitter_trends():
     try:
         # Twitter API endpoint and configuration
         url = "https://api.twitter.com/1.1/trends/place.json"
-        woeid = "23424848"  # Worldwide trends
+        woeid = "1" 
 
         headers = {
             'Authorization': f'Bearer {twitter_api_key}',
