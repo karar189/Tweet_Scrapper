@@ -8,6 +8,8 @@ import time
 from dotenv import load_dotenv
 import os
 import uvicorn
+import requests
+from requests.auth import HTTPBasicAuth
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -184,97 +186,78 @@ def get_twitter_web3_trends():
         logger.exception("An error occurred while fetching Twitter Web3 trends")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+#Reddit-Scrapping------------------------------------------------------
+# Helper function to retrieve OAuth token
+def get_reddit_oauth_token():
+    """Retrieve OAuth token from Reddit."""
+    auth_url = "https://www.reddit.com/api/v1/access_token"
+    client_id = os.getenv('REDDIT_CLIENT_ID')
+    client_secret = os.getenv('REDDIT_CLIENT_SECRET')
+    auth = HTTPBasicAuth(client_id, client_secret)
+    data = {
+        'grant_type': 'password',
+        'username': os.getenv('REDDIT_USERNAME'),  # Your Reddit account username
+        'password': os.getenv('REDDIT_PASSWORD')  # Your Reddit account password
+    }
+    headers = {'User-Agent': 'MyRedditApp/0.1 by YourUsername'}
+
+    response = requests.post(auth_url, auth=auth, data=data, headers=headers)
+    response.raise_for_status()  # This will raise an exception for non-200 responses
+    return response.json()['access_token']
+
+
+# Fetch general Reddit trends
 def get_reddit_trends():
-    """Fetch trending topics from Reddit."""
-    try:
-        url = "https://www.reddit.com/r/all/hot.json"
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+    token = get_reddit_oauth_token()
+    headers = {
+        'Authorization': f"bearer {token}",
+        'User-Agent': 'MyRedditApp/0.1 by YourUsername'
+    }
+    url = "https://oauth.reddit.com/r/all/hot.json?limit=5"
 
-        logger.debug("Fetching Reddit trends...")
-        response = requests.get(url, headers=headers)
-        logger.debug(f"Response status code: {response.status_code}")
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        trends = [RedditTrend(
+            challenge=post['data']['title'],
+            reason=post['data'].get('selftext', 'No description provided')[:100],
+            subreddit=post['data']['subreddit_name_prefixed'],
+            upvotes=post['data']['ups']
+        ) for post in data['data']['children']]
+        return trends
+    else:
+        raise Exception("Failed to fetch data from Reddit")
 
-        if response.status_code == 200:
-            trends_data = response.json()
-            trending_items = []
-
-            posts = trends_data.get('data', {}).get('children', [])
-            for post in posts[:5]:  # Get top 5 trending posts
-                post_data = post.get('data', {})
-                trending_items.append(
-                    RedditTrend(
-                        challenge=post_data.get('title', 'No Title'),
-                        reason=post_data.get('selftext', '')[:100] + '...' if post_data.get('selftext') else 'No description',
-                        subreddit=post_data.get('subreddit_name_prefixed', 'r/unknown'),
-                        upvotes=post_data.get('ups', 0)
-                    )
-                )
-            return trending_items
-        else:
-            logger.error(f"Error fetching Reddit trends: {response.text}")
-            raise HTTPException(status_code=response.status_code, detail="Unable to fetch trends from Reddit")
-
-    except Exception as e:
-        logger.exception("An error occurred while fetching Reddit trends")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-
+# Fetch Web3-specific Reddit trends
 def get_reddit_web3_trends():
-    """Fetch Web3-specific trending topics from Reddit."""
-    try:
-        web3_subreddits = ["cryptocurrency", "web3", "nft", "bitcoin", "ethereum"]
-        trending_items = []
+    token = get_reddit_oauth_token()
+    web3_subreddits = ["cryptocurrency", "web3", "nft", "bitcoin", "ethereum"]
+    trends = []
+    headers = {
+        'Authorization': f"bearer {token}",
+        'User-Agent': 'MyRedditApp/0.1 by YourUsername'
+    }
 
-        for subreddit in web3_subreddits:
-            url = f"https://www.reddit.com/r/{subreddit}/hot.json?limit=3"
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
+    for subreddit in web3_subreddits:
+        url = f"https://oauth.reddit.com/r/{subreddit}/hot.json?limit=3"
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            for post in data['data']['children']:
+                trends.append(RedditTrend(
+                    challenge=post['data']['title'],
+                    reason=post['data'].get('selftext', 'No description provided')[:100],
+                    subreddit=post['data']['subreddit_name_prefixed'],
+                    upvotes=post['data']['ups']
+                ))
+        else:
+            raise Exception("Failed to fetch data from subreddit")
 
-            response = requests.get(url, headers=headers)
-            if response.status_code == 200:
-                posts = response.json().get('data', {}).get('children', [])
-                for post in posts:
-                    post_data = post.get('data', {})
-                    
-                    # Extract relevant information
-                    title = post_data.get('title', '')
-                    selftext = post_data.get('selftext', '')
-                    upvotes = post_data.get('ups', 0)
-                    subreddit_name = post_data.get('subreddit_name_prefixed', 'r/unknown')
-                    url = post_data.get('url', '')
-                    author = post_data.get('author', 'unknown')
-                    
-                    # Create a more informative reason field
-                    reason = f"Posted in {subreddit_name} by u/{author} | {upvotes} upvotes"
-                    if selftext:
-                        # Add truncated selftext if available
-                        truncated_text = selftext[:100] + ('...' if len(selftext) > 100 else '')
-                        reason += f"\nContent: {truncated_text}"
-                    elif url and not url.endswith('.json'):
-                        # Add URL if no selftext and URL is not the API endpoint
-                        reason += f"\nLink: {url}"
+    return trends
 
-                    trending_items.append(
-                        RedditTrend(
-                            challenge=title,
-                            reason=reason,
-                            subreddit=subreddit_name,
-                            upvotes=upvotes
-                        )
-                    )
-
-            logger.debug(f"Fetched {len(posts)} posts from {subreddit}")
-
-        # Sort trending items by upvotes to show most popular first
-        trending_items.sort(key=lambda x: x.upvotes, reverse=True)
-
-        return trending_items
-    except Exception as e:
-        logger.exception("An error occurred while fetching Reddit Web3 trends")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+    # except Exception as e:
+    #     logger.error(f"Error fetching Web3 Reddit trends: {str(e)}")
+    #     raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @app.get("/trending-tweeter", response_model=TrendingResponse)
 def fetch_trending_topics():
