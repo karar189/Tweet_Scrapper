@@ -351,3 +351,55 @@ def fetch_reddit_web3_topics():
     except Exception as e:
         logger.exception("Unexpected error while fetching Reddit Web3 topics")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+# New Google Trends Controller
+class GoogleTrend(BaseModel):
+    title: str
+    link: str
+    snippet: str
+
+class GoogleTrendingResponse(BaseModel):
+    status: str
+    data: List[GoogleTrend]
+    message: Optional[str] = None
+
+@app.get("/trending-google/web3", response_model=GoogleTrendingResponse)
+def get_google_web3_trends():
+    """Fetch latest Web3 trends or news from Google."""
+    try:
+        # Google News API or scraping configuration
+        url = "https://newsapi.org/v2/everything"
+        params = {
+            "q": "Web3",
+            "sortBy": "publishedAt",
+            "apiKey": "cd8752e75e93405daa53498ced396941",  # Replace with your API key
+            "pageSize": 5,  # Fetch top 5 news articles
+        }
+
+        logger.debug("Fetching Web3 trends from Google News...")
+        response = requests.get(url, params=params)
+
+        if response.status_code == 200:
+            news_data = response.json()
+            articles = news_data.get("articles", [])
+            google_trends = [
+                {
+                    "title": article["title"],
+                    "link": article["url"],
+                    "snippet": article["description"] or "No description available",
+                }
+                for article in articles
+            ]
+
+            return {
+                "status": "success",
+                "data": google_trends,
+                "message": f"Fetched {len(google_trends)} Web3 news articles.",
+            }
+        else:
+            logger.error(f"Google News API error: {response.status_code} {response.text}")
+            raise HTTPException(status_code=500, detail="Failed to fetch Google Web3 trends")
+    except Exception as e:
+        logger.exception("Exception occurred while fetching Google Web3 trends.")
+        raise HTTPException(status_code=500, detail=str(e))
